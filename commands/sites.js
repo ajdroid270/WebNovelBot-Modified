@@ -1,5 +1,5 @@
-const { prefix } = process.env;
-const miscData = process.env.miscData;
+const configVars = require("../EnvLoader");
+const { prefix, miscData } = configVars.env;
 module.exports = {
   name: "sites",
   description: "Lists all currently supported sites.",

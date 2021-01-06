@@ -1,6 +1,7 @@
 const cheerio = require("cheerio");
 const fetch = require("node-fetch");
-const { prefix } = process.env;
+const configVars = require("../EnvLoader");
+const { prefix } = configVars.env;
 const _ = require("underscore");
 
 module.exports = {

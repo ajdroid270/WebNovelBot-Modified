@@ -1,4 +1,5 @@
-const { prefix } = process.env;
+const configVars = require("../EnvLoader");
+const { prefix } = configVars.env;
 module.exports = {
   name: "kick",
   description: `This doesn't do anything yet. Just a shell`,

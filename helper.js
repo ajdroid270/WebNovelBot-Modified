@@ -1,28 +1,29 @@
 const FormData = require("form-data");
 const cheerio = require("cheerio");
 const fetch = require("node-fetch");
-const { prefix, shrinkmeToken } = process.env;
+const configVars = require("./EnvLoader");
+const { prefix, shrinkmeToken } = configVars.env;
 const urlMetadata = require("url-metadata");
 const { google } = require("googleapis");
-const credentials = JSON.parse(process.env.serviceAccCreds);
+const credentials = JSON.parse(configVars.env.serviceAccCreds);
 let driveFiles = require("./drive-files.json");
-const lnmtlAccounts = JSON.parse(process.env.miscData);
+const lnmtlAccounts = JSON.parse(configVars.env.miscData);
 const fs = require("fs");
 const path = require("path");
 const moment = require("moment");
 const jsdom = require("jsdom");
-const cookies = JSON.parse(process.env.cookies);
+const cookies = JSON.parse(configVars.env.cookies);
 const { JSDOM } = jsdom;
-const fuzzysort = require('fuzzysort')
-const Discord = require('discord.js');
-const Pagination = require('discord-paginationembed');
-const paginationEmbed = require('discord.js-pagination');
+const fuzzysort = require("fuzzysort");
+const Discord = require("discord.js");
+const Pagination = require("discord-paginationembed");
+const paginationEmbed = require("discord.js-pagination");
 
-
-const scopes = JSON.parse(process.env.scopes);
-const ORIGINAL_PERMISSION_ID = process.env.ORIGINAL_PERMISSION_ID;
-const ORIGINAL_EMAIL_ADDRESS = process.env.ORIGINAL_EMAIL_ADDRESS;
-const SERVICE_ACCOUNT_PERMISSION_ID = process.env.SERVICE_ACCOUNT_PERMISSION_ID;
+const scopes = JSON.parse(configVars.env.scopes);
+const ORIGINAL_PERMISSION_ID = configVars.env.ORIGINAL_PERMISSION_ID;
+const ORIGINAL_EMAIL_ADDRESS = configVars.env.ORIGINAL_EMAIL_ADDRESS;
+const SERVICE_ACCOUNT_PERMISSION_ID =
+  configVars.env.SERVICE_ACCOUNT_PERMISSION_ID;
 const PUBLIC = "anyoneWithLink";
 
 let auth;
@@ -41,7 +42,7 @@ try {
 
 const drive = google.drive({ version: "v3", auth });
 
-const driveTmpFolderId = process.env.driveTmpFolderId;
+const driveTmpFolderId = configVars.env.driveTmpFolderId;
 
 const getDrives = async () => {
   let allDataFetched = false;
@@ -190,7 +191,6 @@ const deleteDriveFile = async (name) => {
   updateDriveFiles(remainingFiles);
 };
 
-
 const matchWords = (subject, words) => {
   var regexMetachars = "/[(){[*+?.\\^$|]/g";
 
@@ -204,8 +204,8 @@ const matchWords = (subject, words) => {
 };
 
 const searchDriveFiles = (searchString) => {
-  return fuzzysort.go(searchString, driveFiles, {key:'name'});
-}
+  return fuzzysort.go(searchString, driveFiles, { key: "name" });
+};
 
 // const paginateData = async (data, message) => {
 //   const embeds = [];
@@ -258,54 +258,76 @@ const searchDriveFiles = (searchString) => {
 //   return Embeds.build();
 // }
 
-const paginateData = async (data, message, options={pageLength: 10, searchString}) => {
-  const numPages = Math.ceil(data.length/options.pageLength);
+const paginateData = async (
+  data,
+  message,
+  options = { pageLength: 10, searchString }
+) => {
+  const numPages = Math.ceil(data.length / options.pageLength);
   const renderEmbed = (page, totalPages, list) => {
     const fields = [];
-    for(let i = 0; i< list.length; i++){
+    for (let i = 0; i < list.length; i++) {
       const item = list[i];
       item.obj.size / (1024 * 1024) < 0.25
-    ? (item.obj.relSize = `${(item.obj.size / 1024).toFixed(2)} KB`)
-    : (item.obj.relSize = `${(item.obj.size / (1024 * 1024)).toFixed(2)} MB`);
+        ? (item.obj.relSize = `${(item.obj.size / 1024).toFixed(2)} KB`)
+        : (item.obj.relSize = `${(item.obj.size / (1024 * 1024)).toFixed(
+            2
+          )} MB`);
       fields.push({
-        name: `Book ${(page-1)*options.pageLength+(i+1)}: ${item.obj.name}`,
-        value: `Size: ${item.obj.relSize} | Last Modified: ${moment(item.obj.modifiedTime).format("LLLL")} | [Download Link](${shrinkifyUrl(item.obj.webContentLink)})`
-        })
+        name: `Book ${(page - 1) * options.pageLength + (i + 1)}: ${
+          item.obj.name
+        }`,
+        value: `Size: ${item.obj.relSize} | Last Modified: ${moment(
+          item.obj.modifiedTime
+        ).format("LLLL")} | [Download Link](${shrinkifyUrl(
+          item.obj.webContentLink
+        )})`,
+      });
     }
     const embed = new Discord.MessageEmbed()
-      .setColor('#0099ff')
+      .setColor("#0099ff")
       .setTitle(`Page ${page}`)
-      .setAuthor('Webnovel Bot')
-      .setDescription(`Search Results ${options.searchString && 'for ' + options.searchString}`)
+      .setAuthor("Webnovel Bot")
+      .setDescription(
+        `Search Results ${
+          options.searchString && "for " + options.searchString
+        }`
+      )
       .addFields(fields)
-      .setTimestamp()
+      .setTimestamp();
     return embed;
-  }
+  };
   let embeds = [];
-  for(let i = 0; i<numPages; i++){
-    embeds.push(renderEmbed(i+1, numPages, data.slice(i*options.pageLength, (i+1)*options.pageLength)));
+  for (let i = 0; i < numPages; i++) {
+    embeds.push(
+      renderEmbed(
+        i + 1,
+        numPages,
+        data.slice(i * options.pageLength, (i + 1) * options.pageLength)
+      )
+    );
   }
   console.log(embeds, numPages);
   return paginationEmbed(message, embeds);
-}
+};
 
 const addUrlParam = (baseUrl, key, value) => {
-  isFirstParam = !baseUrl.includes('?');
-  return `${baseUrl}${isFirstParam ? '?':'&'}${key}=${value}`
-}
+  isFirstParam = !baseUrl.includes("?");
+  return `${baseUrl}${isFirstParam ? "?" : "&"}${key}=${value}`;
+};
 
 const shrinkifyUrl = (url, alias, ads = true, quick = true) => {
-  let baseUrl = quick ? `https://shrinkme.io/st`: `https://shrinkme.io/api`;
-  let myUrl = addUrlParam(baseUrl, 'api', shrinkmeToken);
-  myUrl = addUrlParam(myUrl, 'url', url);
-  if(alias) myUrl = addUrlParam(myUrl, 'alias', alias.substring(0,30));
+  let baseUrl = quick ? `https://shrinkme.io/st` : `https://shrinkme.io/api`;
+  let myUrl = addUrlParam(baseUrl, "api", shrinkmeToken);
+  myUrl = addUrlParam(myUrl, "url", url);
+  if (alias) myUrl = addUrlParam(myUrl, "alias", alias.substring(0, 30));
   if (!ads) {
-    myUrl = addUrlParam(myUrl, 'type', 0);
+    myUrl = addUrlParam(myUrl, "type", 0);
     // baseurl += "&type=0";
   }
   console.log(myUrl);
   return myUrl;
-}
+};
 
 const shrinkMe = async (url, alias, ads = true) => {
   let myUrl = shrinkifyUrl(url, alias, ads, false);
@@ -750,9 +772,7 @@ async function mtlnScrapeMetadata(link) {
   return metadata;
 }
 
-const generateEpub = (data, options) => {
-
-}
+const generateEpub = (data, options) => {};
 
 module.exports = {
   scopes: scopes,

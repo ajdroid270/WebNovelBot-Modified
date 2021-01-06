@@ -1,5 +1,6 @@
 const _ = require("underscore");
-const { prefix } = process.env;
+const configVars = require("../EnvLoader");
+const { prefix } = configVars.env;
 var brooklyn_99_quotes = [
   "I'm the human form of the 💯 emoji.",
   "Bingpot${prefix}",

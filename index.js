@@ -4,14 +4,12 @@ const FormData = require("form-data");
 const _ = require("underscore");
 const fs = require("fs");
 const cheerio = require("cheerio");
-const keepAlive = require('./server');
-const dotenv = require("dotenv");
-dotenv.config();
-const myConfig = process.env;
+const configVars = require("./EnvLoader");
+const myConfig = configVars.env;
+const keepAlive = require("./server");
 const { prefix, token, experimental, logChannel } = myConfig;
 const myTestGuild = myConfig.guild;
 const validChannelsList = myConfig.channelName.split(",");
-console.log({ validChannelsList: validChannelsList });
 
 const client = new Discord.Client();
 client.commands = new Discord.Collection();
@@ -43,7 +41,7 @@ function getReply(message, options) {
       const args1 = msgStr1.split(/ +/);
       message.channel.send(`Your choice is: ${args1[0]}`);
     })
-    .catch(function(e) {
+    .catch(function (e) {
       console.log(e);
       message.channel.send("You didnt select an option");
     });

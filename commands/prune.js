@@ -1,4 +1,5 @@
-const { prefix } = process.env;
+const configVars = require("../EnvLoader");
+const { prefix } = configVars.env;
 module.exports = {
   name: "prune",
   description:

@@ -1,6 +1,7 @@
 const cheerio = require("cheerio");
 const fetch = require("node-fetch");
-const { prefix } = process.env;
+const configVars = require("../EnvLoader");
+const { prefix } = configVars.env;
 const Epub = require("epub-gen");
 const _ = require("underscore");
 const _s = require("underscore.string");

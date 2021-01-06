@@ -1,4 +1,5 @@
-const { prefix } = process.env;
+const configVars = require("../EnvLoader");
+const { prefix } = configVars.env;
 let driveFiles = require("../drive-files.json");
 const {
   updateDriveFiles,
@@ -40,11 +41,17 @@ module.exports = {
     }
 
     if (args[0] == "pagination") {
-      await paginateData([], message)
+      await paginateData([], message);
       return;
     }
 
-    m_args = args.join(".").toLowerCase().split(`'`).join(``).split(".").join(" ");
+    m_args = args
+      .join(".")
+      .toLowerCase()
+      .split(`'`)
+      .join(``)
+      .split(".")
+      .join(" ");
     console.log({ m_args });
 
     // let regex;
@@ -97,10 +104,13 @@ module.exports = {
       //   }
       // });
       const length = files.length;
-      console.log({length});
-      let optionsMessage = await paginateData(files, message, {searchString: m_args, pageLength: 10});
+      console.log({ length });
+      let optionsMessage = await paginateData(files, message, {
+        searchString: m_args,
+        pageLength: 10,
+      });
       try {
-        console.log('inside try catch');
+        console.log("inside try catch");
         let choiceHelp = await message.reply(
           "Enter comma separated indices of novels to choose the novels you want to download!"
         );

@@ -1,4 +1,5 @@
-const { prefix } = process.env;
+const configVars = require("../EnvLoader");
+const { prefix } = configVars.env;
 module.exports = {
   name: "help",
   description: "Lists all of my commands or info about a specific command.",

@@ -1,7 +1,8 @@
 const FormData = require("form-data");
 const cheerio = require("cheerio");
 const fetch = require("node-fetch");
-const { prefix } = process.env;
+const configVars = require("../EnvLoader");
+const { prefix } = configVars.env;
 const urlMetadata = require("url-metadata");
 
 module.exports = {

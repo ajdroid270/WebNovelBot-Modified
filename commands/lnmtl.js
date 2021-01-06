@@ -3,14 +3,15 @@ const cheerio = require("cheerio");
 const fetch = require("node-fetch");
 const fetchcookie = require("fetch-cookie")(fetch);
 const fetchcookieRedirect = require("fetch-cookie/node-fetch")(fetch);
-const { prefix } = process.env;
+const configVars = require("../EnvLoader");
+const { prefix } = configVars.env;
 const Epub = require("epub-gen");
 const _ = require("underscore");
 const _s = require("underscore.string");
 const path = require("path");
 const fs = require("fs");
-const cookies = process.env.cookies;
-const miscData = process.env.miscData;
+const cookies = configVars.env.cookies;
+const miscData = configVars.env.miscData;
 const lnmtlAccounts = miscData.accounts;
 const {
   nuSearchShort,

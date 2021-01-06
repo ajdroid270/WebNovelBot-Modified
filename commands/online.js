@@ -1,4 +1,5 @@
-const { prefix } = process.env;
+const configVars = require("../EnvLoader");
+const { prefix } = configVars.env;
 module.exports = {
   name: "online",
   description: "Replies with bot connection status",
