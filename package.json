@@ -2,11 +2,11 @@
   "name": "discordjs-webnovelbot",
   "version": "1.0.0",
   "description": "",
-  "main": "bot.js",
+  "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "nodemon bot.js",
-    "start-n-stop": "heroku ps:scale worker=0 && nodemon bot.js",
+    "start": "nodemon index.js",
+    "start-n-stop": "heroku ps:scale worker=0 && nodemon index.js",
     "push": "git push origin master && git push heroku master"
   },
   "engines": {
@@ -22,8 +22,10 @@
     "cookiejar": "^2.1.2",
     "discord-paginationembed": "^2.1.0",
     "discord.js": "^12.2.0",
+    "discord.js-pagination": "^1.0.3",
     "dotenv": "^8.2.0",
     "epub-gen": "^0.1.0",
+    "express": "^4.17.1",
     "fetch-cookie": "^0.10.1",
     "form-data": "^3.0.0",
     "fuzzysort": "^1.1.4",
