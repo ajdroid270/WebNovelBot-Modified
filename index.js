@@ -6,12 +6,20 @@ const fs = require("fs");
 const cheerio = require("cheerio");
 const configVars = require("./EnvLoader");
 const myConfig = configVars.env;
-const keepAlive = require("./server");
+// const keepAlive = require("./server");
 const { prefix, token, experimental, logChannel } = myConfig;
 const myTestGuild = myConfig.guild;
 const validChannelsList = myConfig.channelName.split(",");
 
-const client = new Discord.Client();
+const client = new Discord.Client({
+  presence: {
+    status: "online",
+    activity: {
+      name: `${myConfig.prefix}help`,
+      type: "LISTENING",
+    },
+  },
+});
 client.commands = new Discord.Collection();
 const commandFiles = fs
   .readdirSync("./commands")
@@ -124,5 +132,5 @@ client.on("message", (message) => {
   }
 });
 
-keepAlive(client, validChannelsList, myTestGuild, logChannel);
+// keepAlive(client, validChannelsList, myTestGuild, logChannel);
 client.login(token);
