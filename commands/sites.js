@@ -1,5 +1,6 @@
 const configVars = require("../EnvLoader");
-const { prefix, miscData } = configVars.env;
+const { prefix } = configVars.env;
+const miscData = JSON.parse(configVars.env.miscData);
 module.exports = {
   name: "sites",
   description: "Lists all currently supported sites.",
