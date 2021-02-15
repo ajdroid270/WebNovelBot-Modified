@@ -11,7 +11,7 @@ module.exports = {
   execute(message, args) {
     var sites = miscData.sites;
     message.reply(
-      "WebnovelBot currently supports the following sites:\n" + sites.join("")
+      "WebnovelBot currently supports the following sites:\n" + sites.join("\n")
     );
   },
 };
