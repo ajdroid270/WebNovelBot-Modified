@@ -28,6 +28,7 @@
     "express": "^4.17.1",
     "fetch-cookie": "^0.10.1",
     "form-data": "^3.0.0",
+    "fuse.js": "^6.4.6",
     "fuzzysort": "^1.1.4",
     "googleapis": "^66.0.0",
     "jsdom": "^16.4.0",
