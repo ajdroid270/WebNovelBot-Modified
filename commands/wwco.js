@@ -147,7 +147,11 @@ module.exports = {
       }
     }
 
-    processingMessage.edit(`making epub!`);
+    try {
+      processingMessage.edit(`making epub!`);
+    } catch (error) {
+      console.log(error);
+    }
 
     const option = {
       title: bookTitle, // *Required, title of the book.
