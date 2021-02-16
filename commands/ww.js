@@ -107,6 +107,16 @@ module.exports = {
     novelMetaData = await this.getMetaData(novelHomePageLink);
     console.log(novelMetaData.cover);
     // return;
+    startingChapterIndex = isProvidedLinkHome
+      ? 0
+      : novelMetaData.chapters.findIndex((v, i) => {
+          if (
+            v.link.includes(startingChapterLink) ||
+            startingChapterLink.includes(v.link)
+          ) {
+            return true;
+          }
+        });
     currentChapterIndex = startingChapterIndex;
     let currentChapterLink = novelMetaData.chapters[currentChapterIndex].link;
     let nextChapterExists = true;
