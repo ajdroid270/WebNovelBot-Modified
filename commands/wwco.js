@@ -6,6 +6,7 @@ const Epub = require("epub-gen");
 const _ = require("underscore");
 const path = require("path");
 const fs = require("fs");
+const cloudscraper = require("cloudscraper");
 const {
   nuSearchShort,
   nuScrapeMetadata,
@@ -17,110 +18,164 @@ const {
 
 module.exports = {
   name: "wwco",
+  siteNovelPrefix: "https://www.wuxiaworld.co/",
   description: `Scrape chapters from the given link for the specified N number of chapters!`,
   usage: `${prefix}wwco link *N`,
   example: `${prefix}wwco https://m.wuxiaworld.co/The-Second-Coming-of-Gluttony/5013560.html 60`,
   args: true,
   guildOnly: true,
   experimental: false,
+  async getMetaData(novelHomePageLink) {
+    let metadata = {};
+    var options = cloudscraper.defaultParams;
+    options = {
+      ...options,
+      method: "GET",
+      uri: novelHomePageLink,
+      // Cloudscraper automatically parses out timeout required by Cloudflare.
+      // Override cloudflareTimeout to adjust it.
+      cloudflareTimeout: 5000,
+      // Reduce Cloudflare's timeout to cloudflareMaxTimeout if it is excessive
+      cloudflareMaxTimeout: 30000,
+      // followAllRedirects - follow non-GET HTTP 3xx responses as redirects
+      followAllRedirects: true,
+    };
+    let page = await cloudscraper(options);
+    const $ = cheerio.load(page);
+    console.time("metadata");
+    metadata.title = $("div.book-info div.book-name").text().trim();
+    metadata.description = $(
+      "div.about-wrapper div.synopsis div.content p.desc"
+    )
+      .text()
+      .trim()
+      .split("\n\n")
+      .join("\n");
+    metadata.publisher = "WuxiaWorld.Co";
+    metadata.author = $("div.person-info div.author span.name").text().trim();
+    let count = 0;
+    do {
+      metadata.cover = $("div.book-img img").first().attr("src");
+      count++;
+    } while (!metadata.cover && count < 3);
+    metadata.status = $("div.book-info div.base-info div.book-state")
+      .text()
+      .trim();
+    metadata.chapters = $("ul.chapter-list a.chapter-item")
+      .map((i, el) => {
+        let e = $(el);
+        let chapName = e.text().trim();
+        return {
+          link: `${this.siteNovelPrefix}${e.attr("href").toString().slice(1)}`,
+          name: chapName.toLowerCase().includes("chapter")
+            ? chapName
+            : `Chapter ${chapName}`,
+        };
+      })
+      .toArray();
+    console.timeEnd("metadata");
+    return metadata;
+  },
   async execute(message, args) {
+    let isProvidedLinkHome = false;
+    let novelSlug = "";
+    let providedLink = args[0];
+    let startingChapterLink =
+      _.last(providedLink) === "/" ? providedLink : `${providedLink}/`;
+    let startingChapterIndex = 0;
+    let currentChapterIndex = 0;
+    let novelHomePageLink = "";
+    let novelMetaData = {};
     let chapterCount = 0;
+    let chapterLimit = _.isNaN(args[1]) ? null : args[1];
     let bookContent = [];
-    let link = args[0];
-    let linkMetadata = {};
-    if (!link.includes("wuxiaworld.co/")) {
+    let currentChapterLink = startingChapterLink;
+    if (!currentChapterLink.includes("wuxiaworld.co/")) {
       return message.reply(`\`ww\` command only supports wuxiaworld novels.`);
     }
-    let novelName = link
-      .replace("https://www.wuxiaworld.co/", "")
-      .split("/")[0]
-      .split("-")
-      .join(" ");
-    try {
-      searchResults = await nuSearchShort(
-        novelName.trim().substring(0, 10),
-        false,
-        false
-      );
-      if (searchResults.length == 0) {
-        console.log("nu long search");
-        searchResults = await nuSearchLong(
-          novelName.trim().split(" "),
-          false,
-          false
-        );
-      }
-      console.log(searchResults);
-    } catch (error) {
-      console.log(error.message);
+    novelSlug = currentChapterLink
+      .replace(this.siteNovelPrefix, "")
+      .split("/")[0];
+    if (
+      `${this.siteNovelPrefix}${novelSlug}/` === startingChapterLink ||
+      `${this.siteNovelPrefix}${novelSlug}` === startingChapterLink
+    ) {
+      isProvidedLinkHome = true;
     }
-    let nuLink = searchResults[0];
-    try {
-      linkMetadata = await nuScrapeMetadata(nuLink);
-    } catch (error) {
-      console.log(error.message);
-      linkMetadata = await wwcoScrapeMetadata(link);
-    }
-    let maxChapters = _.isNaN(args[1]) ? null : args[1];
+    novelHomePageLink = `${this.siteNovelPrefix}${novelSlug}/`;
+    console.log({ novelHomePageLink });
+    novelMetaData = await this.getMetaData(novelHomePageLink);
+    // console.log(novelMetaData);
+    // return;
+    startingChapterIndex = isProvidedLinkHome
+      ? 0
+      : novelMetaData.chapters.findIndex((v, i) => {
+          if (
+            v.link.includes(startingChapterLink) ||
+            startingChapterLink.includes(v.link)
+          ) {
+            return true;
+          }
+        });
+    currentChapterIndex = startingChapterIndex;
+    currentChapterLink = novelMetaData.chapters[currentChapterIndex].link;
     let nextChapterExists = true;
     let processingMessage;
-    let bookTitle = linkMetadata.title;
-    let bookAuthor = linkMetadata.authors;
-    let bookCoverArt = linkMetadata.image;
+    let bookTitle = novelMetaData.title;
+    let bookAuthor = novelMetaData.author;
+    let bookCoverArt = novelMetaData.cover;
     let customCss =
       "h1,h2,h3,h4,h5,h6,b,strong{color:#cc5635;font-style:italic;padding:0;margin:0}p,li{text-align:justify;text-indent:3%}br{text-align:justify;text-indent:3%}div{text-align:justify;text-indent:3%}";
     let cancelProcess = false;
     let numTries = 1;
-    while (nextChapterExists) {
+    while (currentChapterIndex < novelMetaData.chapters.length) {
       try {
         if (numTries >= 10) break;
-        let page = await fetch(link)
-          .then((res) => res.text())
-          .catch((err) => console.log(err.message));
+        var options = cloudscraper.defaultParams;
+        options = {
+          ...options,
+          method: "GET",
+          uri: currentChapterLink,
+          // Cloudscraper automatically parses out timeout required by Cloudflare.
+          // Override cloudflareTimeout to adjust it.
+          cloudflareTimeout: 5000,
+          // Reduce Cloudflare's timeout to cloudflareMaxTimeout if it is excessive
+          cloudflareMaxTimeout: 30000,
+          // followAllRedirects - follow non-GET HTTP 3xx responses as redirects
+          followAllRedirects: true,
+        };
+        let page = await cloudscraper(options);
         const $ = cheerio.load(page);
-        !bookTitle
-          ? (bookTitle = $(
-              "div.read-container > div.book-wrapper > div.book-name"
-            )
-              .text()
-              .trim())
-          : null;
-        !bookAuthor
-          ? (bookAuthor = $(
-              "div.read-container > div.book-wrapper > div.author > span.author-name"
-            ).text())
-          : null;
-        const chapterName = $(
-          "div#section-list-wp > section.section > h1.chapter-title"
-        )
-          .text()
-          .trim();
-        const nextChapterLink = `https://www.wuxiaworld.co${$(
-          "div.read-container > div.reader-page > a.next"
-        ).attr("href")}`;
-        link = nextChapterLink;
-        nextChapterLink
-          ? (nextChapterExists = true)
-          : (nextChapterExists = false);
-        $(
-          "#section-list-wp > section.section > div.chapter-entity > script"
-        ).remove();
-        $(
-          "#section-list-wp > section.section > div.chapter-entity > ins"
-        ).remove();
-        $(
-          "#section-list-wp > section.section > div.chapter-entity > br"
-        ).insertAfter("<br>");
+        // !bookTitle
+        //   ? (bookTitle = $(
+        //       "div.read-container > div.book-wrapper > div.book-name"
+        //     )
+        //       .text()
+        //       .trim())
+        //   : null;
+        // !bookAuthor
+        //   ? (bookAuthor = $(
+        //       "div.read-container > div.book-wrapper > div.author > span.author-name"
+        //     ).text())
+        //   : null;
+        const chapterName = novelMetaData.chapters[currentChapterIndex].name;
+        $("script").remove();
+        $("h1.chapter-title").remove();
+        $("ins").remove();
+        // $("br").append("<p>\n</p>");
         const chapterContent =
-          "<hr/><p>" +
-          $("#section-list-wp > section.section > div.chapter-entity").html() +
-          "</p>";
+          "<hr/><div>" +
+          $("#section-list-wp > section.section > div.chapter-entity")
+            .html()
+            .trim() +
+          "</div>";
         if (chapterName && chapterContent) {
           bookContent.push({
             title: chapterName,
             data: chapterContent,
           });
         }
+        console.log(chapterContent);
         chapterCount++;
         console.log(`chapters processed: ${chapterCount}`);
         let instructionText = `React with \:pause_button: to make epub with currently processed chapters.\nReact with \:stop_button: to cancel the process.`;
@@ -136,13 +191,15 @@ module.exports = {
             return true;
           };
         }
-        if (chapterCount >= maxChapters) {
+        currentChapterIndex++;
+        currentChapterLink = novelMetaData.chapters[currentChapterIndex].link;
+        if (chapterCount >= chapterLimit) {
           break;
         }
         numTries = 1;
       } catch (error) {
         console.log(error.message);
-        console.log(`trying to load ${link} again`);
+        console.log(`trying to load ${currentChapterLink} again`);
         numTries++;
       }
     }
