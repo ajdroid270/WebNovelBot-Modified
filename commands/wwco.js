@@ -119,7 +119,6 @@ module.exports = {
         });
     currentChapterIndex = startingChapterIndex;
     currentChapterLink = novelMetaData.chapters[currentChapterIndex].link;
-    let nextChapterExists = true;
     let processingMessage;
     let bookTitle = novelMetaData.title;
     let bookAuthor = novelMetaData.author;
@@ -175,7 +174,7 @@ module.exports = {
             data: chapterContent,
           });
         }
-        console.log(chapterContent);
+        // console.log(chapterContent);
         chapterCount++;
         console.log(`chapters processed: ${chapterCount}`);
         let instructionText = `React with \:pause_button: to make epub with currently processed chapters.\nReact with \:stop_button: to cancel the process.`;
