@@ -1,5 +1,4 @@
 const cheerio = require("cheerio");
-const fetch = require("node-fetch");
 const configVars = require("../EnvLoader");
 const { prefix } = configVars.env;
 const Epub = require("epub-gen");
@@ -8,8 +7,6 @@ const path = require("path");
 const fs = require("fs");
 const cloudscraper = require("cloudscraper");
 const {
-  nuSearchShort,
-  nuScrapeMetadata,
   uploadFileToDrive,
   driveTmpFolder,
   getDriveEmbed,
@@ -42,6 +39,7 @@ module.exports = {
     let page = await cloudscraper(options);
     const $ = cheerio.load(page);
     console.time("metadata");
+    $("span.manga-title-badges").remove();
     metadata.title = $("div.site-content div.post-title").text().trim();
     metadata.description = $(
       "div.description-summary div.summary__content div#editdescription"
@@ -86,7 +84,6 @@ module.exports = {
     let isProvidedLinkHome = false;
     let novelSlug = "";
     let providedLink = args[0];
-    // let startingChapterLink = providedLink;
     let startingChapterLink =
       _.last(providedLink) === "/" ? providedLink : `${providedLink}/`;
     let startingChapterIndex = 0;
@@ -112,11 +109,11 @@ module.exports = {
     }
     novelHomePageLink = `${this.siteNovelPrefix}${novelSlug}/`;
     novelMetaData = await this.getMetaData(novelHomePageLink);
-    console.log(novelMetaData);
+    // console.log(novelMetaData);
     // return;
     startingChapterIndex = isProvidedLinkHome
       ? novelMetaData.chapters.length - 1
-      : novelMetaData.chapters.findIndex((v, i) => {
+      : novelMetaData.chapters.findIndex((v) => {
           if (
             v.link.includes(startingChapterLink) ||
             startingChapterLink.includes(v.link)
@@ -128,13 +125,6 @@ module.exports = {
     currentChapterIndex = startingChapterIndex;
     let currentChapterLink = startingChapterLink;
 
-    if (!currentChapterLink.includes("boxnovel")) {
-      return message.reply(
-        `\`boxnovel\` command only supports boxnovel novels.`
-      );
-    }
-
-    let nextChapterExists = true;
     let processingMessage;
     let bookTitle = novelMetaData.title;
     let bookAuthor = novelMetaData.author;
@@ -144,10 +134,13 @@ module.exports = {
     let cancelProcess = false;
     let numTries = 1;
     var options = cloudscraper.defaultParams;
-    while (nextChapterExists) {
+    console.log({ currentChapterIndex });
+    while (currentChapterIndex >= 0) {
       try {
         console.log("processing :" + currentChapterLink);
-        if (numTries >= 10) break;
+        if (numTries >= 10) {
+          break;
+        }
         console.time("chapter loop");
         console.time("chapter Fetch");
         options = {
@@ -169,14 +162,11 @@ module.exports = {
         const $ = cheerio.load(page);
         console.timeEnd("cheerio load");
         $("i.icon").remove();
+        $("span.manga-title-badges").remove();
         let chapterContent;
         let chapterName = novelMetaData.chapters[currentChapterIndex].name;
         chapterContent =
           "<hr/>" + $("div.reading-content > div.text-left").html();
-
-        // console.log(chapterName);
-        // console.log(chapterContent);
-        // return;
         if (chapterName && chapterContent) {
           bookContent.push({
             title: chapterName,
@@ -187,7 +177,7 @@ module.exports = {
         }
         chapterCount++;
         console.log(`chapters processed: ${chapterCount}`);
-        let instructionText = `React with \:pause_button: to make epub with currently processed chapters.\nReact with \:stop_button: to cancel the process.`;
+        // let instructionText = `React with :pause_button: to make epub with currently processed chapters.\nReact with :stop_button: to cancel the process.`;
         if (processingMessage) {
           chapterCount % 5 == 0
             ? processingMessage.edit(`chapters processed: ${chapterCount}`)
@@ -196,9 +186,9 @@ module.exports = {
           processingMessage = await message.channel.send(
             `chapters processed: ${chapterCount}`
           );
-          const filter = (reaction, user) => {
-            return true;
-          };
+          // const filter = (reaction, user) => {
+          //   return true;
+          // };
         }
         if (chapterCount >= chapterLimit) {
           break;
@@ -220,52 +210,56 @@ module.exports = {
       console.log(error);
     }
 
-    const option = {
-      title: bookTitle, // *Required, title of the book.
-      author: bookAuthor, // *Required, name of the author.
-      publisher: "BoxNovel", // optional
-      cover: bookCoverArt,
-      content: bookContent,
-      version: 2,
-      css: customCss,
-    };
+    try {
+      const option = {
+        title: bookTitle, // *Required, title of the book.
+        author: bookAuthor, // *Required, name of the author.
+        publisher: "BoxNovel", // optional
+        cover: bookCoverArt,
+        content: bookContent,
+        version: 2,
+        css: customCss,
+      };
 
-    if (!cancelProcess) {
-      new Epub(
-        option,
-        path.resolve(process.cwd(), `./epubs/${bookTitle}.epub`)
-      ).promise
-        .then(async () => {
-          let fileStat = fs.lstatSync(
-            path.resolve(process.cwd(), `./epubs/${bookTitle}.epub`)
-          );
-          if (fileStat.size > 8000000) {
-            let file = await uploadFileToDrive(
-              path.resolve(process.cwd(), `./epubs/${bookTitle}.epub`),
-              driveTmpFolder,
-              `${bookTitle}_${Date.now()}.epub`
+      if (!cancelProcess) {
+        new Epub(
+          option,
+          path.resolve(process.cwd(), `./epubs/${bookTitle}.epub`)
+        ).promise
+          .then(async () => {
+            let fileStat = fs.lstatSync(
+              path.resolve(process.cwd(), `./epubs/${bookTitle}.epub`)
             );
-            let embed = await getDriveEmbed(file);
-            message.reply(embed);
-          } else {
-            await message
-              .reply({
-                files: [
-                  path.resolve(process.cwd(), `./epubs/${bookTitle}.epub`),
-                ],
-              })
-              .catch((error) => console.log(error.message));
-          }
-          fs.unlink(
-            path.resolve(process.cwd(), `./epubs/${bookTitle}.epub`),
-            () => {}
-          );
-          processingMessage.delete();
-        })
-        .catch((err) => console.error(err.message));
-    } else {
-      processingMessage.delete();
-      message.channel.send("Process stopped.");
+            if (fileStat.size > 8000000) {
+              let file = await uploadFileToDrive(
+                path.resolve(process.cwd(), `./epubs/${bookTitle}.epub`),
+                driveTmpFolder,
+                `${bookTitle}_${Date.now()}.epub`
+              );
+              let embed = await getDriveEmbed(file);
+              message.reply(embed);
+            } else {
+              await message
+                .reply({
+                  files: [
+                    path.resolve(process.cwd(), `./epubs/${bookTitle}.epub`),
+                  ],
+                })
+                .catch((error) => console.log(error.message));
+            }
+            fs.unlink(
+              path.resolve(process.cwd(), `./epubs/${bookTitle}.epub`),
+              () => {}
+            );
+            processingMessage.delete();
+          })
+          .catch((err) => console.error(err.message));
+      } else {
+        processingMessage.delete();
+        message.channel.send("Process stopped.");
+      }
+    } catch (error) {
+      console.log(error);
     }
   },
 };
