@@ -1,182 +1,187 @@
 const cheerio = require("cheerio");
-const fetch = require("node-fetch");
 const configVars = require("../EnvLoader");
 const { prefix } = configVars.env;
 const Epub = require("epub-gen");
 const _ = require("underscore");
-const _s = require("underscore.string");
 const path = require("path");
 const fs = require("fs");
+const cloudscraper = require("cloudscraper");
 const {
-  nuSearchShort,
-  nuScrapeMetadata,
   uploadFileToDrive,
   driveTmpFolder,
   getDriveEmbed,
-  nuSearchLong,
 } = require("../helper");
 
 module.exports = {
   name: "vip",
+  siteNovelPrefix: "https://vipnovel.com/vipnovel/",
   description:
     "Scrape chapters from the given link for the specified N number of chapters!",
   usage: `${prefix}vip <link> *N`,
   example: `${prefix}vip https://vipnovel.com/vipnovel/full-marks-hidden-marriage-pick-up-a-son-get-a-free-husband/chapter-1/ 60`,
   args: false,
   guildOnly: false,
-  async execute(message, args) {
-    let chapterCount = 0;
-    let bookContent = [];
-    let link = args[0];
-    let linkMetadata = {};
-    if (!link.includes("vipnovel")) {
-      return message.reply(
-        `\`vipnovel\` command only supports vipnovel novels.`
-      );
-    }
-    let novelName = link
-      .replace("https://vipnovel.com/vipnovel/", "")
-      .split("/")[0]
-      .split("-")
-      .join(" ")
+  async getMetaData(novelHomePageLink) {
+    let metadata = {};
+    var options = cloudscraper.defaultParams;
+    options = {
+      ...options,
+      method: "GET",
+      uri: novelHomePageLink,
+      // Cloudscraper automatically parses out timeout required by Cloudflare.
+      // Override cloudflareTimeout to adjust it.
+      cloudflareTimeout: 5000,
+      // Reduce Cloudflare's timeout to cloudflareMaxTimeout if it is excessive
+      cloudflareMaxTimeout: 30000,
+      // followAllRedirects - follow non-GET HTTP 3xx responses as redirects
+      followAllRedirects: true,
+    };
+    let page = await cloudscraper(options);
+    const $ = cheerio.load(page);
+    console.time("metadata");
+    $("span.manga-title-badges").remove();
+    metadata.title = $("div.site-content div.post-title").text().trim();
+    metadata.description = $("div.description-summary div.summary__content")
+      .text()
       .trim();
-    linkMetadata.title = novelName;
-    console.log("Novel Name: " + novelName);
-    let searchResults;
-    try {
-      searchResults = await nuSearchShort(
-        novelName.trim().substring(0, 10),
-        false,
-        false
+    metadata.publisher = "https://vipnovel.com";
+    metadata.author = $(
+      "div.summary_content div.post-content div.post-content_item:nth-of-type(6) div.summary-content div.author-content"
+    )
+      .text()
+      .trim();
+    let count = 0;
+    do {
+      metadata.cover = $("div.tab-summary div.summary_image img.img-responsive")
+        .first()
+        .attr("src");
+      count++;
+    } while (!metadata.cover && count < 3);
+    metadata.release = $(
+      "div.post-status div.post-content_item:nth-child(1) div.summary-content"
+    )
+      .text()
+      .trim();
+    metadata.status = $(
+      "div.post-status div.post-content_item:nth-child(2) div.summary-content"
+    )
+      .text()
+      .trim();
+    metadata.chapters = $(
+      "div.page-content-listing.single-page li.wp-manga-chapter a"
+    )
+      .map(function (i, el) {
+        let e = $(el);
+        return { link: e.attr("href").toString() + "/", name: e.text().trim() };
+      })
+      .toArray();
+    console.timeEnd("metadata");
+    return metadata;
+  },
+  async execute(message, args) {
+    let isProvidedLinkHome = false;
+    let novelSlug = "";
+    let providedLink = args[0];
+    let startingChapterLink =
+      _.last(providedLink) === "/" ? providedLink : `${providedLink}/`;
+    let startingChapterIndex = 0;
+    let currentChapterIndex = 0;
+    let novelHomePageLink = "";
+    let novelMetaData = {};
+    let chapterCount = 0;
+    let chapterLimit = _.isNaN(args[1]) ? null : args[1];
+    let bookContent = [];
+    if (!startingChapterLink.includes("vipnovel.com")) {
+      return message.reply(
+        `\`vipnovel\` command only supports vipnovel.com novels.`
       );
-      if (searchResults.length == 0) {
-        console.log("nu long search");
-        searchResults = await nuSearchLong(
-          novelName.trim().split(" "),
-          false,
-          false
-        );
-      }
-      console.log(searchResults);
-    } catch (error) {
-      console.log(error.message);
     }
-    let nuLink = searchResults[0];
-    try {
-      linkMetadata = await nuScrapeMetadata(nuLink);
-    } catch (error) {
-      console.log(error.message);
+    novelSlug = startingChapterLink
+      .replace(this.siteNovelPrefix, "")
+      .split("/")[0];
+    if (
+      `${this.siteNovelPrefix}${novelSlug}/` === startingChapterLink ||
+      `${this.siteNovelPrefix}${novelSlug}` === startingChapterLink
+    ) {
+      isProvidedLinkHome = true;
     }
-    let maxChapters = _.isNaN(args[1]) ? null : args[1];
-    let nextChapterExists = true;
+    novelHomePageLink = `${this.siteNovelPrefix}${novelSlug}/`;
+    console.log({
+      novelHomePageLink,
+      providedLink,
+      startingChapterLink,
+      novelSlug,
+    });
+    novelMetaData = await this.getMetaData(novelHomePageLink);
+    console.log(novelMetaData);
+    // return;
+    startingChapterIndex = isProvidedLinkHome
+      ? novelMetaData.chapters.length - 1
+      : novelMetaData.chapters.findIndex((v) => {
+          if (
+            v.link.includes(startingChapterLink) ||
+            startingChapterLink.includes(v.link)
+          ) {
+            return true;
+          }
+        });
+    startingChapterLink = novelMetaData.chapters[startingChapterIndex].link;
+    currentChapterIndex = startingChapterIndex;
+    let currentChapterLink = startingChapterLink;
+
     let processingMessage;
-    let bookTitle = linkMetadata.title;
-    let bookAuthor = linkMetadata.authors;
-    let bookCoverArt = linkMetadata.image;
+    let bookTitle = novelMetaData.title;
+    let bookAuthor = novelMetaData.author;
+    let bookCoverArt = novelMetaData.cover;
     let customCss =
       "h1,h2,h3,h4,h5,h6,b,strong{color:#cc5635;font-style:italic;padding:0;margin:0}p,li{text-align:justify;text-indent:3%}br{text-align:justify;text-indent:3%}div{text-align:justify;text-indent:3%}";
     let cancelProcess = false;
     let numTries = 1;
-    while (nextChapterExists) {
+    var options = cloudscraper.defaultParams;
+    while (currentChapterIndex >= 0) {
       try {
-        console.log("processing :" + link);
+        console.log("processing :" + currentChapterLink);
         if (numTries >= 10) break;
         console.time("chapter loop");
         console.time("chapter Fetch");
-        let page = await fetch(link)
-          .then((res) => res.text())
-          .catch((err) => console.log(err.message));
+        options = {
+          ...options,
+          method: "GET",
+          uri: currentChapterLink,
+          // Cloudscraper automatically parses out timeout required by Cloudflare.
+          // Override cloudflareTimeout to adjust it.
+          cloudflareTimeout: 5000,
+          // Reduce Cloudflare's timeout to cloudflareMaxTimeout if it is excessive
+          cloudflareMaxTimeout: 30000,
+          // followAllRedirects - follow non-GET HTTP 3xx responses as redirects
+          followAllRedirects: true,
+        };
+        let page = await cloudscraper(options);
         console.timeEnd("chapter Fetch");
         // console.log(page);
         console.time("cheerio load");
         const $ = cheerio.load(page);
         console.timeEnd("cheerio load");
+        $("i.icon").remove();
+        $("span.manga-title-badges").remove();
         let chapterContent;
-        let chapterName = $("div.cha-tit > h3").text();
-        if (chapterName) {
-          chapterContent =
-            "<hr/>" + $("div.chap-content > div.cha-words").html();
-        } else if (
-          $("div.reading-content > div.text-left > p:nth-child(1)").text()
-        ) {
-          chapterName = $(
-            "div.reading-content > div.text-left > p:nth-child(1)"
-          ).text();
-          $("div.reading-content > div.text-left > p:nth-child(1)").remove();
-          chapterContent =
-            "<hr/>" + $("div.reading-content > div.text-left").html();
-        } else if (
-          $("div.reading-content > div.text-left > h3:nth-child(1)").text()
-        ) {
-          chapterName = $(
-            "div.reading-content > div.text-left > h3:nth-child(1)"
-          ).text();
-          $("div.reading-content > div.text-left > h3:nth-child(1)").remove();
-          chapterContent =
-            "<hr/>" + $("div.reading-content > div.text-left").html();
-        } else if (
-          $("div.reading-content > div.text-left > h4:nth-child(1)").text()
-        ) {
-          chapterName = $(
-            "div.reading-content > div.text-left > h4:nth-child(1)"
-          ).text();
-          $("div.reading-content > div.text-left > h4:nth-child(1)").remove();
-          chapterContent =
-            "<hr/>" + $("div.reading-content > div.text-left").html();
-        } else if (
-          $("div.reading-content > div.text-left > h1:nth-child(1)").text()
-        ) {
-          chapterName = $(
-            "div.reading-content > div.text-left > h1:nth-child(1)"
-          ).text();
-          $("div.reading-content > div.text-left > h1:nth-child(1)").remove();
-          chapterContent =
-            "<hr/>" + $("div.reading-content > div.text-left").html();
-        } else if (
-          $(
-            "div.reading-content > div.text-left > div.text-left > h3:nth-child(1)"
-          ).text()
-        ) {
-          chapterName = $(
-            "div.reading-content > div.text-left > div.text-left > h3:nth-child(1)"
-          ).text();
-          $(
-            "div.reading-content > div.text-left > div.text-left > h3:nth-child(1)"
-          ).remove();
-          chapterContent =
-            "<hr/>" +
-            $("div.reading-content > div.text-left > div.text-left").html();
-        }
-
-        if (!chapterName) {
-          chapterName = _s
-            .capitalize(
-              link
-                .replace("https://vipnovel.com/vipnovel/", "")
-                .split("/")
-                .pop()
-                .split("-")
-                .join(" ")
-            )
-            .trimRight();
-        }
-
-        if (!chapterContent) {
-          chapterContent =
-            "<hr/>" + $("div.reading-content > div.text-left").html();
-        }
-
-        console.log(chapterName);
-        const nextChapterLink = $(
-          "div.nav-links > div.nav-next > a.btn.next_page"
+        let chapterName = $(
+          "div.reading-content > div.text-left div.cha-tit h3"
         )
-          .first()
-          .attr("href");
-        link = nextChapterLink;
-        nextChapterLink
-          ? (nextChapterExists = true)
-          : (nextChapterExists = false);
-        console.log("Next chpater exists: " + nextChapterExists);
+          .text()
+          .trim();
+        if (
+          chapterName.length >
+          novelMetaData.chapters[currentChapterIndex].name.length
+        ) {
+          $("div.reading-content > div.text-left div.cha-tit").remove();
+          novelMetaData.chapters[currentChapterIndex].name = chapterName;
+        } else {
+          chapterName = novelMetaData.chapters[currentChapterIndex].name;
+        }
+        console.log({ chapterName });
+        chapterContent =
+          "<hr/>" + $("div.reading-content > div.text-left").html();
         if (chapterName && chapterContent) {
           bookContent.push({
             title: chapterName,
@@ -187,7 +192,7 @@ module.exports = {
         }
         chapterCount++;
         console.log(`chapters processed: ${chapterCount}`);
-        let instructionText = `React with \:pause_button: to make epub with currently processed chapters.\nReact with \:stop_button: to cancel the process.`;
+        // let instructionText = `React with \:pause_button: to make epub with currently processed chapters.\nReact with \:stop_button: to cancel the process.`;
         if (processingMessage) {
           chapterCount % 5 == 0
             ? processingMessage.edit(`chapters processed: ${chapterCount}`)
@@ -196,17 +201,19 @@ module.exports = {
           processingMessage = await message.channel.send(
             `chapters processed: ${chapterCount}`
           );
-          const filter = (reaction, user) => {
-            return true;
-          };
+          // const filter = (reaction, user) => {
+          //   return true;
+          // };
         }
-        if (chapterCount >= maxChapters) {
+        if (chapterCount >= chapterLimit) {
           break;
         }
         console.timeEnd("chapter loop");
+        currentChapterIndex--;
+        currentChapterLink = novelMetaData.chapters[currentChapterIndex].link;
       } catch (error) {
         console.log(error.message);
-        console.log(`trying to load ${link} again`);
+        console.log(`trying to load ${currentChapterLink} again`);
         numTries++;
       }
     }
