@@ -164,7 +164,20 @@ module.exports = {
         $("i.icon").remove();
         $("span.manga-title-badges").remove();
         let chapterContent;
-        let chapterName = novelMetaData.chapters[currentChapterIndex].name;
+        let chapterName = $(
+          "div.reading-content > div.text-left div.cha-tit h3"
+        )
+          .text()
+          .trim();
+        if (
+          chapterName.length >
+          novelMetaData.chapters[currentChapterIndex].name.length
+        ) {
+          $("div.reading-content > div.text-left div.cha-tit").remove();
+          novelMetaData.chapters[currentChapterIndex].name = chapterName;
+        } else {
+          chapterName = novelMetaData.chapters[currentChapterIndex].name;
+        }
         chapterContent =
           "<hr/>" + $("div.reading-content > div.text-left").html();
         if (chapterName && chapterContent) {
