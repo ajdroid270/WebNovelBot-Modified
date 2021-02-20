@@ -20,13 +20,14 @@ module.exports = {
     function sendList(list, masterList) {
       let data = "";
       list.forEach((item, i) => {
-        prevData = data;
+        let prevData = data;
         data += `[${item}](${masterList[i]})\n`;
         if (data.length >= 2048) data = prevData;
       });
       console.log(data);
       message.channel.send({
-        content: "Enter index of the novel for detailed info!",
+        content:
+          "Enter index of the novel for scraping the whole novel! \nUse `index:N` to scrape first N chapters from the novel.",
         embed: {
           title: "WebnovelBot Search",
           description: data,
@@ -140,7 +141,7 @@ module.exports = {
     }
 
     async function wwcoSearch(searchString) {
-      urlSearchString = searchString.split(" ").join("%20") + "/1";
+      let urlSearchString = searchString.split(" ").join("%20") + "/1";
       let l = [];
       var result = await fetch(
         `https://www.wuxiaworld.co/search/${urlSearchString}/1`,
@@ -168,7 +169,7 @@ module.exports = {
       $(
         `div.result-wrapper > div.result-container_2.result-container > ul.result-list > li.list-item`
       ).each(function (i, el) {
-        metadata = {};
+        let metadata = {};
         let a = $("a", this);
         let img = $("img", this);
         metadata.link = `https://www.wuxiaworld.co${a.attr("href")}`;
@@ -237,7 +238,7 @@ module.exports = {
       if (result.length <= 0) return [];
       const $ = cheerio.load(result);
       $(`li`).each(function (i, el) {
-        metadata = {};
+        let metadata = {};
         let a = $("a", this);
         let img = $("img", this);
         metadata.link = `${a.attr("href")}`;
@@ -392,10 +393,22 @@ module.exports = {
       });
       collector.on("collect", async (m) => {
         console.log(`Collected ${m.content}`);
-        selectedOption = m.content;
-        let num = +selectedOption.trim();
+        let selectedOption = m.content;
+        let input = selectedOption.trim();
+        let num = +input.split(":")[0];
+        let chapters = +input.split(":")[1];
         if (_.isNumber(num) && num > 0 && num <= list.length) {
           message.channel.send(masterList[num - 1]);
+          const command =
+            message.client.commands.get("scrape") ||
+            message.client.commands.find(
+              (cmd) => cmd.aliases && cmd.aliases.includes("scrape")
+            );
+          let scrapeArgs = [masterList[num - 1]];
+          if (chapters) {
+            scrapeArgs.push(chapters);
+          }
+          command.execute(message, scrapeArgs, message.client);
         } else {
           message.channel.send("Invalid Selection!");
         }
