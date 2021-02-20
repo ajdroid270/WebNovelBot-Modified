@@ -44,6 +44,9 @@ module.exports = {
         case "www.mtlnovel.com":
           commandName = "mtln";
           break;
+        case "www.chapterupdates.com":
+          commandName = "chup";
+          break;
         default:
           commandName = "sites";
           break;
