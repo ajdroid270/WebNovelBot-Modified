@@ -38,7 +38,14 @@ module.exports = {
     if (!args.length) {
       return message.reply(`You didn't provide any arguments!`);
     }
-    let searchString = args.join(` `);
+    let searchString = args
+      .map((item) => {
+        item = item.split("’")[0];
+        item = item.split("'")[0];
+        console.log(item);
+        return item;
+      })
+      .join(` `);
     searchString = searchString.toLowerCase();
     console.log(`${message.author.username}: ${searchString}`);
 
