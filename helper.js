@@ -18,6 +18,7 @@ const fuzzysort = require("fuzzysort");
 const Discord = require("discord.js");
 const Pagination = require("discord-paginationembed");
 const paginationEmbed = require("discord.js-pagination");
+const EPub = require("epub-gen/lib");
 
 const scopes = JSON.parse(configVars.env.scopes);
 const ORIGINAL_PERMISSION_ID = configVars.env.ORIGINAL_PERMISSION_ID;
@@ -772,7 +773,44 @@ async function mtlnScrapeMetadata(link) {
   return metadata;
 }
 
-const generateEpub = (data, options) => {};
+const generateEpub = (
+  option,
+  bookTitle,
+  driveTmpFolder,
+  message,
+  processingMessage
+) => {
+  new EPub(
+    option,
+    path.resolve(process.cwd(), `./epubs/${bookTitle}.epub`)
+  ).promise
+    .then(async () => {
+      let fileStat = fs.lstatSync(
+        path.resolve(process.cwd(), `./epubs/${bookTitle}.epub`)
+      );
+      if (fileStat.size > 8000000) {
+        let file = await uploadFileToDrive(
+          path.resolve(process.cwd(), `./epubs/${bookTitle}.epub`),
+          driveTmpFolder,
+          `${bookTitle}_${Date.now()}.epub`
+        );
+        let embed = await getDriveEmbed(file);
+        message.reply(embed);
+      } else {
+        await message
+          .reply({
+            files: [path.resolve(process.cwd(), `./epubs/${bookTitle}.epub`)],
+          })
+          .catch((error) => console.log(error.message));
+      }
+      fs.unlink(
+        path.resolve(process.cwd(), `./epubs/${bookTitle}.epub`),
+        () => {}
+      );
+      processingMessage.delete();
+    })
+    .catch((err) => console.error(err.message));
+};
 
 module.exports = {
   scopes: scopes,
