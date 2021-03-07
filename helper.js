@@ -792,7 +792,7 @@ const generateEpub = (
         let file = await uploadFileToDrive(
           path.resolve(process.cwd(), `./epubs/${bookTitle}.epub`),
           driveTmpFolder,
-          `${bookTitle}_${Date.now()}.epub`
+          `${bookTitle.split("'", "_")}_${Date.now()}.epub`
         );
         let embed = await getDriveEmbed(file);
         message.reply(embed);
