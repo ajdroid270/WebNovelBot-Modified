@@ -10,6 +10,7 @@ const {
   uploadFileToDrive,
   driveTmpFolder,
   getDriveEmbed,
+  generateEpub,
 } = require("../helper");
 
 module.exports = {
@@ -235,38 +236,13 @@ module.exports = {
     };
 
     if (!cancelProcess) {
-      new Epub(
+      generateEpub(
         option,
-        path.resolve(process.cwd(), `./epubs/${bookTitle}.epub`)
-      ).promise
-        .then(async () => {
-          let fileStat = fs.lstatSync(
-            path.resolve(process.cwd(), `./epubs/${bookTitle}.epub`)
-          );
-          if (fileStat.size > 8000000) {
-            let file = await uploadFileToDrive(
-              path.resolve(process.cwd(), `./epubs/${bookTitle}.epub`),
-              driveTmpFolder,
-              `${bookTitle}_${Date.now()}.epub`
-            );
-            let embed = await getDriveEmbed(file);
-            message.reply(embed);
-          } else {
-            await message
-              .reply({
-                files: [
-                  path.resolve(process.cwd(), `./epubs/${bookTitle}.epub`),
-                ],
-              })
-              .catch((error) => console.log(error.message));
-          }
-          fs.unlink(
-            path.resolve(process.cwd(), `./epubs/${bookTitle}.epub`),
-            () => {}
-          );
-          processingMessage.delete();
-        })
-        .catch((err) => console.error(err.message));
+        bookTitle,
+        driveTmpFolder,
+        message,
+        processingMessage
+      );
     } else {
       processingMessage.delete();
       message.channel.send("Process stopped.");
