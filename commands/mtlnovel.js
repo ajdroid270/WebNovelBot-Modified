@@ -128,10 +128,10 @@ module.exports = {
     let cancelProcess = false;
     let numTries = 1;
     var options = cloudscraper.defaultParams;
-    console.log({ currentChapterIndex });
+    // console.log({ currentChapterIndex });
     while (currentChapterIndex >= 0) {
       currentChapterLink = novelMetaData.chapters[currentChapterIndex].link;
-      console.log("Current Chapter Link: " + currentChapterLink);
+      // console.log("Current Chapter Link: " + currentChapterLink);
       try {
         if (numTries >= 10) break;
         options = {
@@ -163,6 +163,13 @@ module.exports = {
           chapterName = novelMetaData.chapters[currentChapterIndex].name;
         }
         const chapterContent = "<hr/>" + $("div.post-content > div.par").html();
+        if ($("div.post-content > div.par img").length) {
+          console.log("Current Chapter Link: " + currentChapterLink);
+          console.log(
+            "Image Link: " +
+              $("div.post-content > div.par img").first().attr("href")
+          );
+        }
         $("div.ads").remove();
         $("amp-iframe").remove();
         if (chapterName && chapterContent) {
